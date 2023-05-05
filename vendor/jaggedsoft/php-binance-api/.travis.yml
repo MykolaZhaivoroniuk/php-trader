@@ -1,0 +1,83 @@
+language: php
+sudo: required
+
+matrix:
+  include:
+    - php: 7.0
+    - php: 7.1
+    - php: 7.2
+      env: 
+        - QUALITY=yes
+        - PROXY_VALIDATION=yes
+    - php: nightly
+    - os: osx
+      osx_image: xcode7.2
+  allow_failures:
+    - os: osx
+  
+notifications:
+    webhooks: https://www.travisbuddy.com/?insertMode=update
+
+before_script:
+  - if [[ $PROXY_VALIDATION == "yes" ]]; then mkdir -vp /home/travis/.ssh/; fi
+  - if [[ $PROXY_VALIDATION == "yes" ]]; then ssh-keygen -f /home/travis/.ssh/id_ecdsa -t ecdsa -N ''; fi
+  - if [[ $PROXY_VALIDATION == "yes" ]]; then cat /home/travis/.ssh/*.pub > /home/travis/.ssh/authorized_keys; fi
+  - if [[ $PROXY_VALIDATION == "yes" ]]; then chmod 600 /home/travis/.ssh/*; fi
+  - if [[ $PROXY_VALIDATION == "yes" ]]; then chmod 700 /home/travis/.ssh/.; fi
+  - if [[ $PROXY_VALIDATION == "yes" ]]; then ssh -f -o "StrictHostKeyChecking no" -D 9999 -q -N travis@localhost; fi
+  - mkdir -vp ~/.config/jaggedsoft/
+  - mkdir -vp build/logs
+  - travis_retry wget https://raw.githubusercontent.com/jaggedsoft/php-binance-api/gh-travis/composer-test.json -O composer-test.json
+  - travis_retry wget https://raw.githubusercontent.com/jaggedsoft/php-binance-api/gh-travis/docs.sh -O docs.sh
+  - travis_retry wget https://raw.githubusercontent.com/jaggedsoft/php-binance-api/gh-travis/doxy.gen -O doxy.gen
+  - travis_retry wget https://raw.githubusercontent.com/jaggedsoft/php-binance-api/gh-travis/php-binance-api-test.php -O php-binance-api-test.php
+  - travis_retry wget https://raw.githubusercontent.com/jaggedsoft/php-binance-api/gh-travis/phpunit.xml -O phpunit.xml
+  - travis_retry wget https://github.com/php-coveralls/php-coveralls/releases/download/v2.0.0/php-coveralls.phar -O coveralls.phar
+  - travis_retry wget https://github.com/codacy/php-codacy-coverage/releases/download/1.4.2/codacy-coverage.phar -O codacy.phar
+  - travis_retry wget https://github.com/dmzoneill/fmt/raw/master/fmt.phar -O fmt.phar 
+  - travis_retry wget https://codecov.io/bash -O codecov.sh
+  - COMPOSER=composer-test.json composer -vvv install --no-interaction --no-suggest
+  - chmod -v +x codecov.sh
+  - chmod -v +x docs.sh
+  - chmod -v +x coveralls.phar
+  - travis_retry sudo apt-get install tinyproxy curl
+  - if [[ $PROXY_VALIDATION == "yes" ]]; then tinyproxy; fi
+  - if [[ $PROXY_VALIDATION == "yes" ]]; then travis_retry curl -v -I --proxy socks://127.0.0.1:9999 https://www.google.com; fi
+
+script:
+  - ./vendor/bin/phpunit --verbose --debug --coverage-clover build/logs/clover.xml --bootstrap vendor/autoload.php php-binance-api-test
+  - if [[ $PROXY_VALIDATION == "yes" ]]; then export socks_proxy=http://127.0.0.1:9999; fi
+  - if [[ $PROXY_VALIDATION == "yes" ]]; then ./vendor/bin/phpunit --verbose --debug --coverage-clover build/logs/clover.xml --bootstrap vendor/autoload.php php-binance-api-test; fi
+  - php fmt.phar -v --psr2 --indent_with_space=4 -o=php-binance-api.php.fmt php-binance-api.php
+  - diff php-binance-api.php.fmt php-binance-api.php
+
+after_success:
+    - if [[ $QUALITY == "yes" ]]; then travis_retry php coveralls.phar -v; fi
+    - if [[ $QUALITY == "yes" ]]; then travis_retry php codacy.phar clover -vv build/logs/clover.xml; fi
+    - if [[ $QUALITY == "yes" ]]; then travis_retry bash -x ./codecov.sh -f "!$TRAVIS_BUILD_DIR/php-binance-api-test.php"; fi
+    - if [[ $QUALITY == "yes" ]]; then travis_retry bash -x ./docs.sh; fi
+
+branches:
+  only: master
+
+env:
+  global:
+    - GH_REPO_NAME: php-binance-api
+    - DOXYFILE: $TRAVIS_BUILD_DIR/doxy.gen
+    - GH_REPO_REF: github.com/jaggedsoft/php-binance-api.git
+    - DOXY_FILES: $TRAVIS_BUILD_DIR/php-binance-api.php
+    - DOXY_FILES_EXCLUDE: $TRAVIS_BUILD_DIR/examples/*
+
+addons:
+  apt:
+    packages:
+      - doxygen
+      - doxygen-doc
+      - doxygen-latex
+      - doxygen-gui
+      - graphviz
+
+cache:
+  directories:
+  - vendor
+  - $HOME/.cache/composer

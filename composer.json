@@ -1,0 +1,19 @@
+{
+    "name": "freelancer8899/php-trader",
+    "description": "A php bot for SPOT trading",
+    "type": "project",
+    "require": {
+        "jaggedsoft/php-binance-api": "^0.5.28",
+        "josantonius/json": "^2.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Freelancer8899\\PhpTrader\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Freelancer8899"
+        }
+    ]
+}
